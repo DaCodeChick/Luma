@@ -508,9 +508,37 @@ impl XamlParser {
         
         // Check if this is a markup extension
         if value.starts_with('{') && value.ends_with('}') {
-            // TODO: Parse markup extension properly
-            // For now, just store as string
-            return Ok(XamlValue::String(value.to_string()));
+            // Special case: {{ escapes to {
+            if value.starts_with("{{") {
+                return Ok(XamlValue::String(value[1..].to_string()));
+            }
+            
+            // Parse the markup extension
+            match crate::markup::parse_markup_extension(value) {
+                Ok(parsed) => {
+                    // Store as MarkupExtension value with parsed data
+                    let mut arguments = std::collections::HashMap::new();
+                    
+                    // Add positional argument if present
+                    if let Some(pos_arg) = parsed.positional_arg {
+                        arguments.insert("_positional".to_string(), XamlValue::String(pos_arg));
+                    }
+                    
+                    // Add named arguments
+                    for (key, val) in parsed.arguments {
+                        arguments.insert(key, XamlValue::String(val));
+                    }
+                    
+                    return Ok(XamlValue::MarkupExtension {
+                        extension_name: parsed.name,
+                        arguments,
+                    });
+                }
+                Err(_) => {
+                    // If parsing fails, treat as string
+                    return Ok(XamlValue::String(value.to_string()));
+                }
+            }
         }
         
         // Try to parse as various types

@@ -35,6 +35,7 @@ pub mod dialects;
 pub mod parser;
 pub mod reader;
 pub mod context;
+pub mod converters;
 
 // Re-export commonly used types
 pub use error::{XamlError, Result, ErrorLocation};
@@ -44,6 +45,10 @@ pub use types::{XamlTypeName, XamlType, XamlProperty, TypeRegistry};
 pub use markup::{MarkupExtension, StaticResourceExtension, BindingExtension, NullExtension, TypeExtension};
 pub use parser::{XamlParser, ParserSettings};
 pub use context::ServiceProvider;
+pub use converters::{
+    Thickness, CornerRadius, GridLength,
+    Orientation, Visibility, HorizontalAlignment, VerticalAlignment
+};
 
 /// Prelude module for convenient imports.
 pub mod prelude {
