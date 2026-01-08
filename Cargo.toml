@@ -4,6 +4,8 @@ members = [
     "crates/luma-core",
     "crates/luma-windows",
     "crates/luma-gui",
+    "crates/luma-xaml",
+    "crates/luma-winui",
 ]
 
 [workspace.package]
@@ -29,6 +31,8 @@ once_cell = "1.19"
 luma-core = { path = "crates/luma-core", version = "0.0.1" }
 luma-windows = { path = "crates/luma-windows", version = "0.0.1" }
 luma-gui = { path = "crates/luma-gui", version = "0.0.1" }
+luma-xaml = { path = "crates/luma-xaml", version = "0.0.1" }
+luma-winui = { path = "crates/luma-winui", version = "0.0.1" }
 
 [workspace.dependencies.windows]
 version = "0.52"

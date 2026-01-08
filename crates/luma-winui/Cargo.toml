@@ -1,0 +1,47 @@
+[package]
+name = "luma-winui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "WinUI 3 backend for Luma GUI framework"
+repository = "https://github.com/cmmeu/Luma"
+keywords = ["winui", "gui", "windows", "xaml", "ui"]
+categories = ["gui"]
+
+[dependencies]
+# Core Luma crates
+luma-core = { path = "../luma-core", version = "0.0.1" }
+luma-xaml = { path = "../luma-xaml", version = "0.0.1" }
+
+# Windows App SDK
+# Note: This will require Windows App SDK to be installed
+# See: https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/
+windows = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_WinRT",
+    "Win32_System_Com",
+    "Foundation",
+    "ApplicationModel",
+    # WinUI 3 / XAML features will be added as needed
+    # "UI_Xaml",
+    # "UI_Xaml_Controls",
+    # "UI_Xaml_Markup",
+] }
+
+# Error handling
+thiserror.workspace = true
+
+# Utilities
+once_cell.workspace = true
+
+[dev-dependencies]
+# Testing
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+default = []
+# Enable XAML loading support
+xaml-support = []
