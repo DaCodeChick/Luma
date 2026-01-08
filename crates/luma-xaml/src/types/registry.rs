@@ -63,6 +63,26 @@ impl TypeRegistry {
     pub fn types(&self) -> impl Iterator<Item = &dyn XamlType> {
         self.types.values().map(|b| b.as_ref())
     }
+    
+    /// Get all properties for a type, including inherited properties.
+    pub fn get_all_properties(&self, type_name: &XamlTypeName) -> Vec<&crate::types::XamlProperty> {
+        let mut properties = Vec::new();
+        let mut current_type_name = Some(type_name.clone());
+        
+        while let Some(ref name) = current_type_name {
+            if let Some(xaml_type) = self.lookup_type(name) {
+                // Add properties from this type
+                properties.extend(xaml_type.properties().iter());
+                
+                // Move to base type
+                current_type_name = xaml_type.base_type().cloned();
+            } else {
+                break;
+            }
+        }
+        
+        properties
+    }
 }
 
 impl Default for TypeRegistry {
