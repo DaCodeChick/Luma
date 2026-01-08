@@ -6,6 +6,11 @@ pub fn to_wide_string(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
+/// Convert a wide string slice to a Rust String
+pub fn from_wide_string(wide: &[u16]) -> String {
+    String::from_utf16_lossy(wide)
+}
+
 /// Convert a wide string pointer to a Rust String
 /// 
 /// # Safety
@@ -31,5 +36,12 @@ mod tests {
         assert_eq!(wide.len(), 6); // 5 chars + null terminator
         assert_eq!(wide[0], 'H' as u16);
         assert_eq!(wide[5], 0); // null terminator
+    }
+    
+    #[test]
+    fn test_from_wide_string() {
+        let wide: Vec<u16> = vec!['H' as u16, 'i' as u16];
+        let s = from_wide_string(&wide);
+        assert_eq!(s, "Hi");
     }
 }

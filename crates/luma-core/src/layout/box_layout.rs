@@ -134,7 +134,7 @@ impl BoxLayout {
             let bounds = Rect::new(content_x, content_y, widget_width, widget_height);
             
             tracing::debug!(
-                "Positioning widget at ({}, {}) with size {}x{}",
+                "Positioning widget at ({}, {}), with size {}x{}",
                 bounds.x,
                 bounds.y,
                 bounds.width,

@@ -2,9 +2,11 @@ use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use luma_core::{Result, Error, WindowFlags, traits::WindowBackend};
+use luma_core::{Result, Error, WindowFlags, traits::WindowBackend, Container, Size};
 use crate::utils::{to_wide_string, is_valid_hwnd};
 use once_cell::sync::OnceCell;
+use std::sync::Mutex;
+use std::collections::HashMap;
 
 /// Window class name for Luma windows
 const WINDOW_CLASS_NAME: &str = "LumaWindow";
@@ -12,9 +14,61 @@ const WINDOW_CLASS_NAME: &str = "LumaWindow";
 /// Ensure the window class is registered (only once)
 static WINDOW_CLASS_REGISTERED: OnceCell<()> = OnceCell::new();
 
+/// Wrapper to make raw pointer Send (unsafe but necessary for Win32 callback)
+struct LayoutPtr(*mut dyn Container);
+unsafe impl Send for LayoutPtr {}
+
+/// Global map of HWND to layout for handling WM_SIZE
+static WINDOW_LAYOUTS: OnceCell<Mutex<HashMap<isize, LayoutPtr>>> = OnceCell::new();
+
+fn get_layouts_map() -> &'static Mutex<HashMap<isize, LayoutPtr>> {
+    WINDOW_LAYOUTS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Wrapper to make callback pointer Send
+struct CallbackPtr(*mut dyn FnMut());
+unsafe impl Send for CallbackPtr {}
+
+/// Global map of widget HWND to callback for handling WM_COMMAND
+static WIDGET_CALLBACKS: OnceCell<Mutex<HashMap<isize, CallbackPtr>>> = OnceCell::new();
+
+fn get_callbacks_map() -> &'static Mutex<HashMap<isize, CallbackPtr>> {
+    WIDGET_CALLBACKS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Register a callback for a widget HWND
+pub fn register_callback(hwnd: isize, callback: *mut dyn FnMut()) {
+    let mut map = get_callbacks_map().lock().unwrap();
+    map.insert(hwnd, CallbackPtr(callback));
+    tracing::debug!("Registered callback for widget HWND={:?}", hwnd);
+}
+
+/// Unregister a callback for a widget HWND
+pub fn unregister_callback(hwnd: isize) {
+    let mut map = get_callbacks_map().lock().unwrap();
+    map.remove(&hwnd);
+    tracing::debug!("Unregistered callback for widget HWND={:?}", hwnd);
+}
+
 /// Win32 window backend
 pub struct Win32Window {
     hwnd: HWND,
+}
+
+impl Win32Window {
+    /// Register a layout for this window (for resize handling)
+    pub fn set_layout_ptr(&self, layout: *mut dyn Container) {
+        let mut map = get_layouts_map().lock().unwrap();
+        map.insert(self.hwnd.0, LayoutPtr(layout));
+        tracing::debug!("Registered layout for HWND={:?}", self.hwnd);
+    }
+    
+    /// Unregister the layout for this window
+    pub fn clear_layout_ptr(&self) {
+        let mut map = get_layouts_map().lock().unwrap();
+        map.remove(&self.hwnd.0);
+        tracing::debug!("Unregistered layout for HWND={:?}", self.hwnd);
+    }
 }
 
 impl WindowBackend for Win32Window {
@@ -102,11 +156,26 @@ impl WindowBackend for Win32Window {
     fn raw_handle(&self) -> *mut std::ffi::c_void {
         self.hwnd.0 as *mut std::ffi::c_void
     }
+    
+    fn get_client_size(&self) -> Result<luma_core::Size> {
+        unsafe {
+            let mut rect = RECT::default();
+            if GetClientRect(self.hwnd, &mut rect).is_ok() {
+                let width = (rect.right - rect.left) as u32;
+                let height = (rect.bottom - rect.top) as u32;
+                Ok(luma_core::Size::new(width, height))
+            } else {
+                Err(Error::OperationFailed("GetClientRect failed".into()))
+            }
+        }
+    }
 }
 
 impl Drop for Win32Window {
     fn drop(&mut self) {
         tracing::debug!("Destroying Win32 window: HWND={:?}", self.hwnd);
+        // Clean up layout registration
+        self.clear_layout_ptr();
         unsafe {
             let _ = DestroyWindow(self.hwnd);
         }
@@ -171,6 +240,54 @@ unsafe extern "system" fn window_proc(
             // Paint background
             FillRect(hdc, &ps.rcPaint, HBRUSH((COLOR_WINDOW.0 + 1) as isize));
             EndPaint(hwnd, &ps);
+            LRESULT(0)
+        }
+        WM_SIZE => {
+            // Handle window resize - re-layout all widgets
+            let width = (lparam.0 & 0xFFFF) as u32;
+            let height = ((lparam.0 >> 16) & 0xFFFF) as u32;
+            
+            // Get the layout for this window and trigger re-layout
+            if let Ok(map) = get_layouts_map().lock() {
+                if let Some(layout_ptr) = map.get(&hwnd.0) {
+                    if !layout_ptr.0.is_null() {
+                        let layout = &mut *layout_ptr.0;
+                        let new_size = Size::new(width, height);
+                        
+                        if let Err(e) = layout.layout(new_size) {
+                            tracing::error!("Layout failed during resize: {}", e);
+                        }
+                    }
+                }
+            }
+            
+            DefWindowProcW(hwnd, msg, wparam, lparam)
+        }
+        WM_COMMAND => {
+            // Handle button clicks, checkbox changes, listbox selections
+            // HIWORD(wparam) = notification code, LOWORD(wparam) = control ID
+            // lparam = control HWND
+            let control_hwnd = HWND(lparam.0 as isize);
+            let notification_code = ((wparam.0 >> 16) & 0xFFFF) as u32;
+            
+            tracing::debug!(
+                "WM_COMMAND: control_hwnd={:?}, notification_code={}",
+                control_hwnd,
+                notification_code
+            );
+            
+            // Look up and invoke callback
+            if let Ok(mut map) = get_callbacks_map().lock() {
+                if let Some(callback_ptr) = map.get_mut(&control_hwnd.0) {
+                    if !callback_ptr.0.is_null() {
+                        // Safety: Callback pointer is valid as long as widget exists
+                        // Widget Drop implementations must unregister callbacks
+                        let callback = &mut *callback_ptr.0;
+                        callback();
+                    }
+                }
+            }
+            
             LRESULT(0)
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),

@@ -3,7 +3,28 @@
 **Version**: 0.0.1 (very early stage)  
 **License**: MIT OR Apache-2.0 (dual)  
 **Target Platform**: Windows-first, architecture supports future Linux/macOS  
-**Last Updated**: January 8, 2025
+**Last Updated**: January 8, 2026
+
+---
+
+## Executive Decision: Win32 Backend (Not WinUI 3)
+
+After thorough research (see [Appendix A: WinUI 3 Research](#appendix-a-winui-3-research)), **Luma will use Win32 (user32 + GDI) as the Windows backend**, not WinUI 3 or Windows App SDK.
+
+**Rationale:**
+- ✅ Win32 fully supported in `windows` crate with complete Rust bindings
+- ✅ In-box on every Windows version (minimal memory footprint)
+- ✅ Battle-tested, stable, well-documented API
+- ❌ WinUI 3/XAML **explicitly removed** from `windows` crate (June 2022)
+- ❌ Microsoft states: "XAML only truly supports MSBuild+C#"
+- ❌ `windows-app` crate experimental, undocumented behavior, unsustainable
+
+**Dark Mode Strategy:**
+- **Phase 1-3**: Dark title bars via `DwmSetWindowAttribute` (optional), light window contents (acceptable limitation)
+- **Phase 4+**: Custom control rendering for full dark mode support
+- **Future**: DirectComposition-based rendering layer (as suggested by Microsoft)
+
+See full research findings in [Appendix A](#appendix-a-winui-3-research).
 
 ---
 
@@ -1182,7 +1203,7 @@ RUST_LOG=luma=debug cargo run --example hello_window
    - Custom colors
    - Custom fonts
    - Theme support
-   - Dark mode
+   - Dark mode (via `DwmSetWindowAttribute` for title bars, custom rendering for controls)
 
 5. **Code Generation**
    - Generate Rust code from JSON
@@ -1313,6 +1334,80 @@ For questions, issues, or contributions, please refer to:
 
 ---
 
-**Last Updated**: January 8, 2025  
-**Status**: Ready to begin Phase 1 implementation  
-**Next Step**: Set up workspace structure and implement luma-core foundation
+## Appendix A: WinUI 3 Research
+
+### Research Date: January 8, 2026
+
+**Question:** Should Luma use WinUI 3 / Windows App SDK for native Windows 11 dark mode support?
+
+**Answer:** No. Win32 is the correct choice.
+
+### Findings
+
+#### 1. XAML Removed from `windows` Crate
+
+In June 2022, Microsoft **explicitly removed all XAML APIs** from the `windows` crate:
+- PR #1836: "Remove Xaml from windows crate"
+- Reason: "Xaml is designed squarely for C# developers"
+- Kenny Kerr (maintainer): "there are currently no plans to provide a Rust-friendly version of Xaml"
+
+#### 2. WinUI 3 Status
+
+**Separate crate exists:** `windows-app` (experimental, not recommended)
+
+**Major Issues Identified:**
+- WinUI has **undocumented behavior** and **undocumented assumptions** about host processes
+- Only truly supports MSBuild + C#
+- Implementing `IXamlMetadataProvider` alone is **insufficient**
+- Controls appear to work but **crash unpredictably** in WinUI stack
+- No source code access makes debugging nearly impossible
+- Incomplete fusion manifests cause crashes
+- Quirks **change between WinUI 3 releases**
+
+**Microsoft's Official Position** (Rivera, Windows team):
+> "WinUI has undocumented behavior and makes undocumented assumptions about its host process. (XAML only truly supports MSBuild+C#.) Finding and adjusting for those quirks--that changed between WinUI 3 releases--through trial and error was wasting everyone's time."
+
+> "I think the sustainable way forward is to throw away XAML and build on top of DirectComposition. That's a gargantuan effort and not something folks are working on at this time."
+
+#### 3. Current UI Framework Usage (per Microsoft)
+
+- **Top 2**: WinForms and WPF (both require .NET)
+- **Very low usage**: WinRT XAML (in-box XAML)
+- **Zero usage in Rust**: WinRT XAML
+
+#### 4. What DOES Work
+
+- ✅ **Win32 (user32 + GDI)**: Fully supported, stable, in-box, complete Rust bindings
+- ✅ **Windows.UI.WindowManagement.AppWindow** (UWP): Available but deprecated for new development
+
+### Decision: Continue with Win32
+
+**Pros:**
+1. Battle-tested with complete Rust bindings via `windows` crate
+2. In-box on every Windows version (minimal memory footprint)
+3. No experimental/unsupported territory
+4. Stable API that won't change unexpectedly
+
+**Dark Mode Limitation (Acceptable for MVP):**
+- Can implement dark title bars via `DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE)`
+- Window contents (buttons, panels) remain light themed (standard Win32 controls)
+- This is **consistent with many existing Win32 applications**
+- Documented limitation, not a blocker
+
+**Future Dark Mode Strategy:**
+- **Phase 1-3** (MVP): Dark title bars optional, light controls (acceptable)
+- **Phase 4+**: Custom control rendering (owner-drawn controls) for full dark mode
+- **Phase 5+**: DirectComposition-based rendering layer (hardware-accelerated)
+- **Alternative**: WebView2 backend for Electron-like experience
+
+### References
+
+- GitHub Issue: microsoft/windows-rs#2153 (Feature request: WinUI 3 and Windows App SDK Support)
+- GitHub PR: microsoft/windows-rs#1836 (Remove Xaml from windows crate)
+- windows crate documentation: https://microsoft.github.io/windows-docs-rs/
+
+---
+
+**Last Updated**: January 8, 2026  
+**Status**: Phase 1 implementation complete (luma-core, luma-windows, luma-gui)  
+**Next Step**: Begin Phase 2 - Complete widget set (Label, TextInput, CheckBox, ListBox)

@@ -28,7 +28,7 @@ pub use luma_core::{
     Error, Result,
     Point, Size, Rect,
     WidgetId, WindowId,
-    WindowFlags, ButtonFlags,
+    WindowFlags, ButtonFlags, ListBoxFlags,
     Alignment, Padding, LayoutConstraints,
     BoxLayout, LayoutDirection,
 };

@@ -1,4 +1,4 @@
-use luma_core::{Result, Size, Point, WindowFlags, traits::WindowBackend, Rect, Container, WidgetId, Widget};
+use luma_core::{Result, Point, WindowFlags, traits::WindowBackend, Rect, Container, WidgetId, Widget};
 use crate::Win32Window;
 
 /// Cross-platform window
@@ -36,12 +36,18 @@ impl Window {
     
     /// Set the layout for this window
     pub fn set_layout(&mut self, mut layout: BoxLayout) -> Result<()> {
-        // Trigger initial layout
-        // For now, use a default size - in a real implementation,
-        // we'd get the actual client area size from the window
-        let size = Size::new(800, 600); // TODO: Get from actual window
+        // Trigger initial layout with actual client area size
+        let size = self.backend.get_client_size()?;
         layout.layout(size)?;
+        
+        // Store layout in the window
         self.layout = Some(Box::new(layout));
+        
+        // Register the layout pointer with the Win32 backend for resize handling
+        // SAFETY: The layout lives as long as the Window, and we unregister on drop
+        let layout_ptr = self.layout.as_mut().unwrap().as_mut() as *mut dyn Container;
+        self.backend.set_layout_ptr(layout_ptr);
+        
         Ok(())
     }
     

@@ -25,11 +25,17 @@ impl Button {
     pub fn set_enabled(&mut self, enabled: bool) -> Result<()> {
         self.backend.set_enabled(enabled)
     }
+    
+    /// Get the backend HWND (for callback registration)
+    pub(crate) fn hwnd(&self) -> isize {
+        self.backend.hwnd().0
+    }
 }
 
 impl Widget for Button {
     fn set_bounds(&mut self, bounds: Rect) -> Result<()> {
         self.bounds = bounds;
+        self.backend.set_bounds(bounds.x, bounds.y, bounds.width, bounds.height)?;
         Ok(())
     }
     
@@ -39,6 +45,15 @@ impl Widget for Button {
     
     fn id(&self) -> WidgetId {
         self.id
+    }
+}
+
+impl Drop for Button {
+    fn drop(&mut self) {
+        // Unregister callback before widget is destroyed
+        if self.on_click.is_some() {
+            crate::unregister_callback(self.hwnd());
+        }
     }
 }
 
@@ -101,11 +116,19 @@ impl ButtonBuilder {
         let parent_hwnd = parent.raw_handle();
         let backend = Win32Button::new(parent_hwnd, label, pos, size, flags)?;
         
-        Ok(Button {
+        let mut button = Button {
             backend,
             id: WidgetId::new(),
             bounds: Rect::from_point_size(pos, size),
             on_click: self.on_click,
-        })
+        };
+        
+        // Register callback if present
+        if button.on_click.is_some() {
+            let callback_ptr = button.on_click.as_mut().unwrap().as_mut() as *mut dyn FnMut();
+            crate::register_callback(button.hwnd(), callback_ptr);
+        }
+        
+        Ok(button)
     }
 }
