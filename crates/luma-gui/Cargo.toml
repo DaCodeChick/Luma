@@ -1,0 +1,15 @@
+[package]
+name = "luma-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Main public API for Luma GUI framework"
+
+[dependencies]
+luma-core.workspace = true
+cfg-if.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+luma-windows.workspace = true

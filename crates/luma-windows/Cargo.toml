@@ -1,0 +1,17 @@
+[package]
+name = "luma-windows"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Windows (Win32) backend for Luma GUI framework"
+
+[dependencies]
+luma-core.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+once_cell.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
